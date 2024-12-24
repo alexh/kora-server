@@ -11,11 +11,7 @@ def init_shopify():
     access_token = os.getenv('SHOPIFY_ACCESS_TOKEN')
 
     if not shop_url or not access_token:
-        raise ValueError(
-            f"Missing Shopify credentials: \n"
-            f"SHOPIFY_SHOP_URL: {'✓' if shop_url else '✗'}\n"
-            f"SHOPIFY_ACCESS_TOKEN: {'✓' if access_token else '✗'}"
-        )
+        raise ValueError("SHOPIFY_SHOP_URL and SHOPIFY_ACCESS_TOKEN must be set")
 
     logger.info(f"Initializing Shopify session with shop URL: {shop_url}")
     try:

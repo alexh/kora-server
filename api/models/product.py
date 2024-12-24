@@ -8,3 +8,6 @@ class ProductIdea(models.Model):
     
     class Meta:
         ordering = ['-timestamp'] 
+
+    def __str__(self):
+        return f"Product idea from {self.customer_email or 'anonymous'}" 

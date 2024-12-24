@@ -1,10 +1,22 @@
-.PHONY: install run clean deploy sync-secrets logs status open ssh restart certs version-*
+.PHONY: install run clean deploy sync-secrets logs status open ssh restart certs version-* db-up db-down
+
+# Add these database targets
+db-up:
+	docker-compose up -d db
+	docker-compose ps
+	@echo "Waiting for container to be healthy..."
+	@timeout 30s bash -c 'until docker ps | grep server-db-1 | grep -q "healthy"; do sleep 1; done' || (echo "Database failed to start" && exit 1)
+
+db-down:
+	docker-compose down
+
+# Update the run target to use Django instead of uvicorn
+run: db-up wait-for-db
+	python manage.py migrate
+	python manage.py runserver
 
 install:
 	pip install -r requirements.txt
-
-run: db-up
-	uvicorn main:app --reload
 
 clean:
 	find . -type d -name __pycache__ -exec rm -r {} +
@@ -101,3 +113,15 @@ db-check:
 
 shell:
 	fly ssh console --app kora-server
+
+# Add this new target
+wait-for-db:
+	@python3 scripts/wait_for_db.py
+
+# Show all API routes
+routes:
+	python manage.py show_urls | grep -v '^admin' | grep -v '^static' | column -t
+
+# Show API routes
+api-routes:
+	python manage.py show_api_routes
