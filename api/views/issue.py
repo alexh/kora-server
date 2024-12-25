@@ -2,7 +2,7 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 from ..models import Issue
 from ..serializers.issue import IssueSerializer
-from api.utils import admin_required, send_discord_webhook
+from api.utils.utils import admin_required, send_discord_webhook
 import logging
 
 logger = logging.getLogger(__name__)

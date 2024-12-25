@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize Shopify
-from utils.shopify import init_shopify
+from api.utils.shopify import init_shopify
 init_shopify()
 
 # Create FastAPI app

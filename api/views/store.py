@@ -9,8 +9,8 @@ import logging
 import traceback
 import sys
 
-from api.utils import send_discord_webhook
-from utils.shopify import init_shopify
+from api.utils.utils import send_discord_webhook
+from api.utils.shopify import init_shopify
 
 logger = logging.getLogger(__name__)
 
