@@ -1,27 +1,40 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
+from api.utils import send_discord_webhook
 from utils.auth import get_api_key
 import shopify
 from starlette.status import HTTP_404_NOT_FOUND
 from django.core.cache import cache
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+import logging
+
+# Configure logger at the top of the file
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/store", tags=["store"])
 
 @router.get("/products")
 async def get_products(api_key: str = Depends(get_api_key)):
     try:
+        logger.info("Starting product fetch request")
+        
         # Try to get from cache first
         cache_key = 'shopify_products'
         cached_products = cache.get(cache_key)
         
         if cached_products:
+            logger.info("Returning products from cache")
             return {"products": cached_products, "source": "cache"}
         
-        # If not in cache, fetch from Shopify
+        logger.info("Cache miss - fetching products from Shopify")
         products = shopify.Product.find(status='active')
         product_list = []
         
+        total_products = len(products)
+        total_variants = 0
+        out_of_stock_products = 0
+        low_stock_products = []
+
         for product in products:
             variants = []
             for variant in product.variants:
@@ -36,6 +49,13 @@ async def get_products(api_key: str = Depends(get_api_key)):
                     "requires_shipping": variant.requires_shipping
                 })
             
+            product_has_stock = any(v["in_stock"] for v in variants)
+            if not product_has_stock:
+                out_of_stock_products += 1
+            elif any(0 < v["inventory_quantity"] <= 5 for v in variants):
+                low_stock_products.append(product.title)
+            total_variants += len(variants)
+
             product_list.append({
                 "id": product.id,
                 "title": product.title,
@@ -50,11 +70,69 @@ async def get_products(api_key: str = Depends(get_api_key)):
                 "url": f"https://materials.nyc/products/{product.handle}"
             })
         
-        # Store in cache for 5 minutes
+        logger.info(
+            f"Product stats: {total_products} products, {total_variants} variants, "
+            f"{out_of_stock_products} out of stock, {len(low_stock_products)} low stock"
+        )
+        
+        # Store in cache
         cache.set(cache_key, product_list, timeout=300)
+        logger.info("Products cached successfully")
+
+        # Send Discord webhook
+        logger.info("Sending Discord webhook notification")
+        send_discord_webhook(
+            title="🏪 Product Inventory Update",
+            description="Latest product catalog refresh completed",
+            fields=[
+                {
+                    "name": "📊 Total Products",
+                    "value": str(total_products),
+                    "inline": True
+                },
+                {
+                    "name": "🔄 Total Variants",
+                    "value": str(total_variants),
+                    "inline": True
+                },
+                {
+                    "name": "⚠️ Out of Stock",
+                    "value": f"{out_of_stock_products} products",
+                    "inline": True
+                },
+                {
+                    "name": "⚡ Cache Status",
+                    "value": "✅ Updated",
+                    "inline": True
+                },
+                {
+                    "name": "⏱️ Cache Expiry",
+                    "value": "5 minutes",
+                    "inline": True
+                }
+            ] + ([{
+                "name": "📉 Low Stock Products",
+                "value": "\n".join(f"• {product}" for product in low_stock_products[:5]),
+                "inline": False
+            }] if low_stock_products else []),
+            color="ff5f05",  # Orange color
+            timestamp=True
+        )
+        logger.info("Discord webhook sent successfully")
         
         return {"products": product_list, "source": "shopify"}
     except Exception as e:
+        logger.error(f"Error fetching products: {str(e)}", exc_info=True)
+        # Send error notification
+        send_discord_webhook(
+            title="❌ Product Fetch Error",
+            description="Failed to fetch products from Shopify",
+            fields=[{
+                "name": "Error Details",
+                "value": f"```{str(e)}```",
+                "inline": False
+            }]
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/orders/{order_number}")

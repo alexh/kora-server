@@ -1,4 +1,4 @@
-from .product import ProductIdea
 from .issue import Issue
+from .product_idea import ProductIdea
 
-__all__ = ['ProductIdea', 'Issue'] 
+__all__ = ['Issue', 'ProductIdea'] 

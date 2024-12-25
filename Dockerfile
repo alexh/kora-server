@@ -4,21 +4,29 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    postgresql-client \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy project files
 COPY . .
 
-# Create migrations directory
-RUN mkdir -p api/migrations && touch api/migrations/__init__.py
+# Set Python path
+ENV PYTHONPATH=/app
 
-# Create log directory
-RUN mkdir -p /var/log && touch /var/log/app.log && chmod 666 /var/log/app.log
+# Collect static files
+RUN python manage.py collectstatic --noinput
 
-# Command to run the application with logging
-CMD uvicorn main:app --host 0.0.0.0 --port 8080 --proxy-headers --log-level debug --log-config /app/log_config.json 
+# Run migrations and start server with better logging
+CMD gunicorn config.wsgi:application \
+    --bind 0.0.0.0:8000 \
+    --workers 2 \
+    --threads 2 \
+    --worker-class=gthread \
+    --worker-tmp-dir /dev/shm \
+    --log-file=- \
+    --log-level=debug \
+    --pythonpath /app 

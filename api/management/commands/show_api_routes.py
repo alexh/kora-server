@@ -1,41 +1,62 @@
 from django.core.management.base import BaseCommand
 from django.urls import get_resolver
-from rest_framework.routers import DefaultRouter
+from rest_framework.routers import SimpleRouter, DefaultRouter
 
 class Command(BaseCommand):
-    help = 'Shows all API routes with their HTTP methods'
+    help = 'Shows all API routes in the application'
 
     def handle(self, *args, **options):
-        from api.urls import router  # Import the router from your urls.py
+        resolver = get_resolver()
         
-        self.stdout.write(self.style.HTTP_INFO('\nAPI Routes:'))
-        self.stdout.write(self.style.HTTP_INFO('='*80))
+        def format_pattern(pattern):
+            # Clean up the pattern string
+            path = str(pattern.pattern)
+            # Remove regex start/end markers
+            path = path.replace('^', '').replace('$', '')
+            # Convert regex patterns to more readable format
+            path = path.replace('(?P<pk>[^/.]+)', '{id}')
+            path = path.replace('(?P<format>[a-z0-9]+)', 'json')
+            # Remove format suffix patterns
+            path = path.replace('.json/?', '')
+            return path
+
+        def process_url_patterns(patterns, prefix=''):
+            for pattern in patterns:
+                if hasattr(pattern, 'url_patterns'):
+                    # This is a URLResolver
+                    new_prefix = prefix + format_pattern(pattern)
+                    process_url_patterns(pattern.url_patterns, new_prefix)
+                else:
+                    # This is a URLPattern
+                    path = prefix + format_pattern(pattern)
+                    
+                    # Skip if not an API route or if it's a format suffix route
+                    if not path.startswith('api/') or '.json' in path or path == 'api/':
+                        continue
+                    
+                    view = pattern.callback
+                    if hasattr(view, 'cls'):
+                        view_name = view.cls.__name__
+                        
+                        # Get HTTP methods
+                        methods = []
+                        if hasattr(view.cls, 'get'):
+                            methods.append('GET')
+                        if hasattr(view.cls, 'post'):
+                            methods.append('POST')
+                        if hasattr(view.cls, 'put'):
+                            methods.append('PUT')
+                        if hasattr(view.cls, 'patch'):
+                            methods.append('PATCH')
+                        if hasattr(view.cls, 'delete'):
+                            methods.append('DELETE')
+                        
+                        methods_str = ', '.join(methods) if methods else 'ALL'
+                        self.stdout.write(f"{path:<50} {view_name:<30} {methods_str}")
+
+        self.stdout.write("\nAPI Routes:")
+        self.stdout.write("-" * 80)
+        self.stdout.write(f"{'Path':<50} {'View':<30} {'Methods'}")
+        self.stdout.write("-" * 80)
         
-        for prefix, viewset, basename in router.registry:
-            self.stdout.write(self.style.HTTP_INFO(f'\n{prefix}:'))
-            
-            # Get viewset class
-            viewset_class = viewset
-            if not isinstance(viewset, type):
-                viewset_class = viewset.__class__
-            
-            # Get extra actions
-            extra_actions = getattr(viewset_class, 'get_extra_actions', lambda: [])()
-            for action in extra_actions:
-                http_methods = getattr(action, 'bind_to_methods', ['GET'])
-                method_name = action.__name__
-                self.stdout.write(f"  {', '.join(http_methods)} /{prefix}/{method_name}/")
-            
-            # Check for standard actions
-            if hasattr(viewset_class, 'list'):
-                self.stdout.write(f"  GET /{prefix}/")
-            if hasattr(viewset_class, 'create'):
-                self.stdout.write(f"  POST /{prefix}/")
-            if hasattr(viewset_class, 'retrieve'):
-                self.stdout.write(f"  GET /{prefix}/<id>/")
-            if hasattr(viewset_class, 'update'):
-                self.stdout.write(f"  PUT /{prefix}/<id>/")
-            if hasattr(viewset_class, 'partial_update'):
-                self.stdout.write(f"  PATCH /{prefix}/<id>/")
-            if hasattr(viewset_class, 'destroy'):
-                self.stdout.write(f"  DELETE /{prefix}/<id>/") 
+        process_url_patterns(resolver.url_patterns) 

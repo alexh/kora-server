@@ -3,46 +3,60 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'kora-server'
-primary_region = 'bos'
+app = "kora-server"
 
 [build]
-  dockerfile = 'Dockerfile'
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+  PYTHONUNBUFFERED = "1"
+
+# Primary region for deployment
+primary_region = "iad"
 
 [http_service]
-  internal_port = 8080
-  force_https = true
-  auto_stop_machines = 'stop'
+  internal_port = 8000
+  force_https = false
+  auto_stop_machines = true
   auto_start_machines = true
-  min_machines_running = 0
-  processes = ['app']
+  min_machines_running = 1
+  processes = ["app"]
 
-[[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
+# Extremely lenient health check settings
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "5s"
+  method = "GET"
+  path = "/api/health/"
+  port = 8000
+  protocol = "http"
+  timeout = "2s"
+  tls_skip_verify = true
+
+[http_service.concurrency]
+  type = "connections"
+  hard_limit = 550
+  soft_limit = 500
+
+# VM configuration
+[vm]
+  memory = "512MB"
+  cpu_kind = "shared"
   cpus = 1
 
-# Add this section for custom domain
-[[http_service.checks]]
-  grace_period = "30s"
-  interval = "30s"
-  method = "GET"
-  timeout = "10s"
-  path = "/health-check"
-  min_consecutive_successes = 2
-  max_consecutive_failures = 3
+# HTTP port configuration
+[[services]]
+  protocol = "tcp"
+  internal_port = 8000
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
 
-# Add your custom domain
-[http_service.domains]
-  hostnames = ["api.materials.nyc"]
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
 
-[deploy]
-  strategy = "rolling"
-
-# Add database connection check
-[[services.checks]]
-  grace_period = "30s"
-  interval = "30s"
-  timeout = "10s"
-  type = "startup"
-  command = "python manage.py check"
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]

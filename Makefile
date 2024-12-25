@@ -11,9 +11,9 @@ db-down:
 	docker-compose down
 
 # Update the run target to use Django instead of uvicorn
-run: db-up wait-for-db
-	python manage.py migrate
-	python manage.py runserver
+run: db-up
+	PYTHONUNBUFFERED=1 python manage.py migrate
+	PYTHONUNBUFFERED=1 python manage.py runserver
 
 install:
 	pip install -r requirements.txt
@@ -113,10 +113,6 @@ db-check:
 
 shell:
 	fly ssh console --app kora-server
-
-# Add this new target
-wait-for-db:
-	@python3 scripts/wait_for_db.py
 
 # Show all API routes
 routes:
