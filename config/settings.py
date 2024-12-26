@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
+from cryptography.fernet import Fernet
 
 # Load environment variables from .env file
 load_dotenv()
@@ -63,7 +64,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'api.middleware.HealthCheckMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -187,9 +188,34 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'api.permissions.HasValidAPIKey',
-    ],
-    'EXCEPTION_HANDLER': 'api.utils.custom_exception_handler'
+    ]
 }
 
 ADMIN_API_KEY = os.environ.get('ADMIN_API_KEY', 'dummy_key_for_build')
 DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', 'dummy_webhook_url_for_build')
+
+# Google OAuth2 settings
+GOOGLE_OAUTH_CONFIG = {
+    "web": {
+        "client_id": os.getenv('GOOGLE_CLIENT_ID'),
+        "project_id": os.getenv('GOOGLE_PROJECT_ID'),
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_secret": os.getenv('GOOGLE_CLIENT_SECRET'),
+    }
+}
+
+# Development
+if DEBUG:
+    GOOGLE_OAUTH_REDIRECT_URI = "http://localhost:8000/api/calendar/oauth2callback/"
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+else:
+    # Production
+    GOOGLE_OAUTH_REDIRECT_URI = "https://api.materials.nyc/api/calendar/oauth2callback/"
+
+# Generate this once and store it securely in environment variables
+ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY', Fernet.generate_key())
+
+# Whitenoise configuration
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

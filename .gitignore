@@ -1,4 +1,5 @@
 .env
 *.env
 __pycache__/
-google-credentials.json 
+google-credentials.json
+**/.DS_Store

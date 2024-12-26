@@ -8,6 +8,9 @@ from rest_framework.exceptions import ValidationError
 import logging
 import traceback
 import sys
+import requests
+from bs4 import BeautifulSoup
+import concurrent.futures
 
 from api.utils.utils import send_discord_webhook
 from api.utils.shopify import init_shopify
@@ -31,6 +34,32 @@ def format_exception():
         'type': exc_type.__name__,
         'trace': trace_strings,
     }
+
+def fetch_tracking_status(url):
+    """Fetch the content from a tracking URL"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Get the page content
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        return {
+            'url': url,
+            'status_code': response.status_code,
+            'content': soup.get_text()[:1000],  # First 1000 chars of text content
+            'raw_html': response.text if settings.DEBUG else None  # Only include raw HTML in debug mode
+        }
+    except Exception as e:
+        logger.error(f"Error fetching tracking status for {url}: {str(e)}")
+        return {
+            'url': url,
+            'error': str(e),
+            'status_code': getattr(response, 'status_code', None) if 'response' in locals() else None
+        }
 
 class StoreViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='products')
@@ -266,7 +295,12 @@ class StoreViewSet(viewsets.ViewSet):
         
         try:
             init_shopify()
-            orders = shopify.Order.find(status="any", limit=5)  # Last 5 orders
+            
+            query_params = {'status': 'any', 'limit': 250}
+            if email:
+                query_params['email'] = email
+            
+            orders = shopify.Order.find(**query_params)
             
             matching_orders = []
             for order in orders:
@@ -275,18 +309,48 @@ class StoreViewSet(viewsets.ViewSet):
                 
                 if (email and order.email and order.email.lower() == email.lower()) or \
                    (phone and order_phone and order_phone.endswith(query_phone)):
-                    # Calculate total items by summing quantities
                     total_items = sum(item.quantity for item in order.line_items)
                     
-                    matching_orders.append({
+                    # Get tracking numbers from fulfillments
+                    tracking_numbers = []
+                    tracking_urls = []
+                    tracking_status = []
+                    
+                    if hasattr(order, 'fulfillments'):
+                        for fulfillment in order.fulfillments:
+                            if fulfillment.tracking_number:
+                                tracking_numbers.append(fulfillment.tracking_number)
+                            if fulfillment.tracking_url:
+                                tracking_urls.append(fulfillment.tracking_url)
+                    
+                    # Fetch tracking status if requested
+                    if tracking_urls:
+                        logger.info(f"Fetching tracking status for order {order.name}")
+                        # Use ThreadPoolExecutor to fetch tracking statuses concurrently
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                            tracking_status = list(executor.map(fetch_tracking_status, tracking_urls))
+                    
+                    order_data = {
                         "order_number": order.name,
                         "created_at": order.created_at,
                         "status": order.financial_status,
                         "fulfillment_status": order.fulfillment_status,
-                        "total_items": total_items
-                    })
+                        "total_items": total_items,
+                        "total_price": str(order.total_price),
+                        "tracking_numbers": tracking_numbers,
+                        "tracking_urls": tracking_urls,
+                    }
+                    
+                    if tracking_status:
+                        order_data["tracking_status"] = tracking_status
+                    
+                    matching_orders.append(order_data)
             
+            matching_orders.sort(key=lambda x: x['created_at'], reverse=True)
+            
+            logger.info(f"Found {len(matching_orders)} orders for query: email={email}, phone={phone}")
             return Response({"orders": matching_orders})
+            
         except ValidationError as e:
             return Response({"error": str(e)}, status=400)
         except Exception as e:

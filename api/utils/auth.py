@@ -1,24 +1,16 @@
-from fastapi import HTTPException, Security
-from fastapi.security.api_key import APIKeyHeader
-from starlette.status import HTTP_403_FORBIDDEN
-import os
+from rest_framework.response import Response
+from rest_framework import status
+from django.conf import settings
+from functools import wraps
 
-API_KEY_NAME = "X-API-Key"
-ADMIN_KEY_NAME = "X-Admin-Key"
-
-api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
-admin_key_header = APIKeyHeader(name=ADMIN_KEY_NAME, auto_error=False)
-
-async def get_api_key(api_key_header: str = Security(api_key_header)):
-    if api_key_header == os.getenv("API_KEY"):
-        return api_key_header
-    raise HTTPException(
-        status_code=HTTP_403_FORBIDDEN, detail="Could not validate API key"
-    )
-
-async def get_admin_key(admin_key_header: str = Security(admin_key_header)):
-    if admin_key_header == os.getenv("ADMIN_API_KEY"):
-        return admin_key_header
-    raise HTTPException(
-        status_code=HTTP_403_FORBIDDEN, detail="Could not validate admin key"
-    ) 
+def admin_required(view_func):
+    """Decorator to check for admin API key"""
+    @wraps(view_func)
+    def _wrapped_view(viewset, request, *args, **kwargs):
+        admin_key = request.META.get('HTTP_X_ADMIN_KEY')
+        if not admin_key or admin_key != settings.ADMIN_API_KEY:
+            return Response({
+                'error': 'Invalid or missing admin key'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        return view_func(viewset, request, *args, **kwargs)
+    return _wrapped_view 

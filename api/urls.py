@@ -9,11 +9,13 @@ from api.views import (
 )
 from api.views.health import health_check
 from version import VERSION
+from .views import calendar
 
-# Root view
-def welcome(request):
+# Root view can be moved to api/views/root.py if you prefer
+def api_root(request):
     return JsonResponse({
-        "message": f"welcome to UMI-OS v{VERSION}"
+        "version": VERSION,
+        "message": f"Welcome to UMI-OS v{VERSION}"
     })
 
 # Create a router and register our viewsets with it
@@ -21,10 +23,11 @@ router = DefaultRouter()
 router.register(r'issues', IssueViewSet)
 router.register(r'product-ideas', ProductIdeaViewSet)
 router.register(r'store', StoreViewSet, basename='store')
+router.register(r'calendar', calendar.CalendarViewSet, basename='calendar')
 
-# The health check should be before the router URLs
+# The API routes should all be under /api/
 urlpatterns = [
-    path('', welcome, name='welcome'),
+    path('api/', api_root, name='api-root'),
     path('api/health/', health_check, name='health-check'),
     path('api/', include(router.urls)),
 ] 

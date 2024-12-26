@@ -32,6 +32,9 @@ sync-secrets:
 		fi \
 	done < .env
 
+superuser:
+	python manage.py createsuperuser
+
 # Version management
 version-patch:
 	python scripts/bump_version.py patch

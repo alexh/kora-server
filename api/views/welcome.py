@@ -1,11 +1,16 @@
-from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from config.version import VERSION
+
+try:
+    from config.version import VERSION
+except ImportError:
+    VERSION = 'development'
 
 @api_view(['GET'])
-@authentication_classes([])  # No authentication required
-@permission_classes([])      # No permissions required
 def welcome(request):
+    """Welcome endpoint that returns API info"""
     return Response({
-        "message": f"welcome to UMI-OS v{VERSION}"
+        'message': 'Welcome to the UMI API',
+        'version': VERSION,
+        'status': 'ok'
     }) 
