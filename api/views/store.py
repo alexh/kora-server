@@ -14,6 +14,8 @@ import concurrent.futures
 
 from api.utils.utils import send_discord_webhook
 from api.utils.shopify import init_shopify
+from api.utils.auth import allow_demo_key
+from api.permissions import HasValidAPIKey
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +64,16 @@ def fetch_tracking_status(url):
         }
 
 class StoreViewSet(viewsets.ViewSet):
+    permission_classes = [HasValidAPIKey]
+    allows_demo_keys = True
+    
     @action(detail=False, methods=['get'], url_path='products')
     def products(self, request):
         """List all products"""
+        return self.get_products(request)
+
+    def get_products(self, request):
+        """List all products implementation"""
         try:
             logger.info("🚀 STARTING NEW PRODUCT FETCH REQUEST 🚀")
             

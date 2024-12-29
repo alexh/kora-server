@@ -1,5 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.response import Response
+
+from api.decorators import allow_demo_key
 from ..models import ProductIdea
 from ..serializers.product_idea import ProductIdeaSerializer
 from api.utils.utils import admin_required, send_discord_webhook

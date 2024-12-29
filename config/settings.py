@@ -183,9 +183,7 @@ API_KEY = os.getenv('API_KEY', 'your-dev-api-key-here')
 
 # Add REST Framework settings
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'api.authentication.APIKeyAuthentication',
-    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
     'DEFAULT_PERMISSION_CLASSES': [
         'api.permissions.HasValidAPIKey',
     ]
@@ -219,3 +217,5 @@ ENCRYPTION_KEY = os.getenv('ENCRYPTION_KEY', Fernet.generate_key())
 
 # Whitenoise configuration
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+DEMO_API_KEYS = [key.strip() for key in os.getenv('DEMO_API_KEYS', '').split(',') if key.strip()]
